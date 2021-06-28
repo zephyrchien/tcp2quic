@@ -2,6 +2,8 @@ use quinn::{Certificate, PrivateKey};
 use std::io::Result;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
+const BUFFERSIZE: usize = 4096;
+
 pub fn generate_certificate(
     san: Vec<String>,
 ) -> Result<(Certificate, PrivateKey)> {
@@ -18,7 +20,7 @@ where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
-    let mut buf = vec![0u8; 1024];
+    let mut buf = vec![0u8; BUFFERSIZE];
     let mut n;
     loop {
         n = r.read(&mut buf).await?;
