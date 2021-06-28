@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 rcgen = "0.8"
 futures = "0.3"
-tokio = {version = "1.7", features = ["full"]}
+tokio = {version = "1.7", features = ["rt", "net", "io-util", "macros"]}
 quinn = "0.7"
 rustls = { version = "0.19", features = ["dangerous_configuration", "quic"] }
 webpki = "0.21"
