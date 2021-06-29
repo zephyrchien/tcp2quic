@@ -20,11 +20,7 @@ impl rustls::ServerCertVerifier for SkipVerify {
     }
 }
 
-pub async fn run(
-    local: SocketAddr,
-    remote: SocketAddr,
-    sni: String,
-) -> std::io::Result<()> {
+pub async fn run(local: SocketAddr, remote: SocketAddr, sni: String) {
     let lis = TcpListener::bind(&local).await.unwrap();
     let mut config = ClientConfigBuilder::default().build();
     let tls_config = Arc::get_mut(&mut config.crypto).unwrap();
@@ -37,9 +33,8 @@ pub async fn run(
     let local = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
     let (ep, _) = ep_builder.bind(&local).unwrap();
 
-    loop {
-        let (stream, _) = lis.accept().await?;
-        stream.set_nodelay(true)?;
+    while let Ok((stream, _)) = lis.accept().await {
+        stream.set_nodelay(true).unwrap();
         tokio::spawn(handle(stream, ep.clone(), remote, sni.clone()));
     }
 }
@@ -65,7 +60,6 @@ async fn handle(
         connection: quic_conn,
         ..
     } = connection;
-
     let (mut r_tcp, mut w_tcp) = tcp_stream.split();
     let (mut w_udp, mut r_udp) = quic_conn.open_bi().await?;
     select! {

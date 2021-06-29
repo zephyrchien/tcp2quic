@@ -6,11 +6,7 @@ use quinn::{
 use std::net::SocketAddr;
 use tokio::net::TcpStream;
 
-pub async fn run(
-    local: SocketAddr,
-    remote: SocketAddr,
-    hostname: String,
-) -> std::io::Result<()> {
+pub async fn run(local: SocketAddr, remote: SocketAddr, hostname: String) {
     let (cert, key) = common::generate_certificate(vec![hostname]).unwrap();
     let mut config_builder = ServerConfigBuilder::default();
     config_builder
@@ -23,7 +19,6 @@ pub async fn run(
     while let Some(conn) = incoming.next().await {
         tokio::spawn(handle(conn, remote));
     }
-    Ok(())
 }
 
 async fn handle(
@@ -32,7 +27,6 @@ async fn handle(
 ) -> std::io::Result<()> {
     let connection = match connecting.into_0rtt() {
         Ok((conn, _)) => conn,
-
         Err(conn) => conn.await?,
     };
     let NewConnection {
