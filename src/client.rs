@@ -63,8 +63,8 @@ async fn handle(
     let (mut r_tcp, mut w_tcp) = tcp_stream.split();
     let (mut w_udp, mut r_udp) = quic_conn.open_bi().await?;
     select! {
-        _ = common::copy(&mut r_tcp, &mut w_udp).fuse() => (),
-        _ = common::copy(&mut r_udp, &mut w_tcp).fuse() => (),
+        _ = common::copy(&mut r_tcp, &mut w_udp).fuse() => {},
+        _ = common::copy(&mut r_udp, &mut w_tcp).fuse() => {},
     };
     Ok(())
 }

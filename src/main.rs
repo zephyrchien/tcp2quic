@@ -5,7 +5,7 @@ use std::env;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::process::exit;
 
-const USAGE: &'static str = concat!(
+const USAGE: &str = concat!(
     "usage: tcp2quic <mode> <local> <remote>\n",
     "tcp->quic: tcp2quic -c <tcp_addr> <quic_addr>\n",
     "quic->tcp: tcp2quic -s <quic_addr> <tcp_addr>"

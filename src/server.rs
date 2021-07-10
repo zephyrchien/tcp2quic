@@ -41,8 +41,8 @@ async fn handle(
     while let Some(udp_stream) = bi_streams.next().await {
         let (mut w_udp, mut r_udp) = udp_stream?;
         select! {
-            _ = common::copy(&mut r_udp, &mut w_tcp).fuse() => (),
-            _ = common::copy(&mut r_tcp, &mut w_udp).fuse() => (),
+            _ = common::copy(&mut r_udp, &mut w_tcp).fuse() => {},
+            _ = common::copy(&mut r_tcp, &mut w_udp).fuse() => {},
         };
     }
     Ok(())
