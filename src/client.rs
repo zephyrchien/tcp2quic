@@ -68,25 +68,13 @@ pub async fn run(
     local: SocketAddr,
     remote: SocketAddr,
     sni: String,
-    insecure: bool,
 ) -> std::io::Result<()> {
     let lis = TcpListener::bind(&local).await?;
 
-    let crypto = if insecure {
-        rustls::ClientConfig::builder()
-            .dangerous()
-            .with_custom_certificate_verifier(Arc::new(verify::SkipVerify {}))
-            .with_no_client_auth()
-    } else {
-        let root_store = rustls::RootCertStore {
-            roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
-        };
-        rustls::ClientConfig::builder_with_provider(crypto_provider)
-            .with_safe_default_protocol_versions()
-            .map_err(common::to_invalid_input_error)?
-            .with_root_certificates(root_store)
-            .with_no_client_auth()
-    };
+    let crypto = rustls::ClientConfig::builder()
+        .dangerous()
+        .with_custom_certificate_verifier(Arc::new(verify::SkipVerify {}))
+        .with_no_client_auth();
 
     let mut quic_config = ClientConfig::new(Arc::new(
         quinn::crypto::rustls::QuicClientConfig::try_from(crypto)

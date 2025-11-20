@@ -1,8 +1,8 @@
+use quinn::rustls;
 use std::io::Result;
 use std::sync::Arc;
-use tokio::io::{AsyncRead, AsyncWrite, AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::time::{timeout, Duration};
-use quinn::rustls;
 
 const BUFFER_SIZE: usize = 8 * 1024;
 const FLUSH_TIMEOUT_MS: u64 = 1;
@@ -13,7 +13,10 @@ pub fn to_invalid_input_error<E: std::fmt::Display>(e: E) -> std::io::Error {
 
 pub fn generate_certificate(
     san: Vec<String>,
-) -> Result<(Vec<rustls::pki_types::CertificateDer<'static>>, rustls::pki_types::PrivateKeyDer<'static>)> {
+) -> Result<(
+    Vec<rustls::pki_types::CertificateDer<'static>>,
+    rustls::pki_types::PrivateKeyDer<'static>,
+)> {
     let rcgen::CertifiedKey {
         cert,
         signing_key: key,
@@ -21,12 +24,12 @@ pub fn generate_certificate(
         .map_err(std::io::Error::other)?;
 
     let cert_der = cert.der().to_owned();
-    let key_der = rustls::pki_types::PrivateKeyDer::try_from(key.serialize_der())
-        .map_err(std::io::Error::other)?;
+    let key_der =
+        rustls::pki_types::PrivateKeyDer::try_from(key.serialize_der())
+            .map_err(std::io::Error::other)?;
 
     Ok((vec![cert_der], key_der))
 }
-
 
 pub fn create_transport_config() -> Result<quinn::TransportConfig> {
     let mut transport = quinn::TransportConfig::default();
@@ -34,19 +37,26 @@ pub fn create_transport_config() -> Result<quinn::TransportConfig> {
     transport.max_concurrent_bidi_streams(100u32.into());
     transport.max_concurrent_uni_streams(100u32.into());
     transport.max_idle_timeout(Some(
-        std::time::Duration::from_millis(120000).try_into()
-            .map_err(to_invalid_input_error)?
+        std::time::Duration::from_millis(120000)
+            .try_into()
+            .map_err(to_invalid_input_error)?,
     ));
 
-    transport.stream_receive_window(quinn::VarInt::from_u64(4 * 1024 * 1024).unwrap_or(quinn::VarInt::MAX));
-    transport.receive_window(quinn::VarInt::from_u64(64 * 1024 * 1024).unwrap_or(quinn::VarInt::MAX));
+    transport.stream_receive_window(
+        quinn::VarInt::from_u64(4 * 1024 * 1024).unwrap_or(quinn::VarInt::MAX),
+    );
+    transport.receive_window(
+        quinn::VarInt::from_u64(64 * 1024 * 1024).unwrap_or(quinn::VarInt::MAX),
+    );
     transport.send_window(64 * 1024 * 1024);
 
     transport.initial_mtu(1350);
     transport.enable_segmentation_offload(true);
     transport.mtu_discovery_config(Some(quinn::MtuDiscoveryConfig::default()));
 
-    transport.congestion_controller_factory(Arc::new(quinn::congestion::BbrConfig::default()));
+    transport.congestion_controller_factory(Arc::new(
+        quinn::congestion::BbrConfig::default(),
+    ));
 
     transport.keep_alive_interval(Some(std::time::Duration::from_secs(15)));
     transport.datagram_receive_buffer_size(Some(64 * 1024));
@@ -64,9 +74,11 @@ pub async fn copy_quic_to_tcp(
     let mut need_flush = false;
 
     loop {
-        let read_result = timeout(Duration::from_millis(FLUSH_TIMEOUT_MS), async {
-            recv_stream.read(&mut buf).await
-        }).await;
+        let read_result =
+            timeout(Duration::from_millis(FLUSH_TIMEOUT_MS), async {
+                recv_stream.read(&mut buf).await
+            })
+            .await;
 
         match read_result {
             Ok(Ok(Some(n))) if n > 0 => {
@@ -100,9 +112,11 @@ pub async fn copy_tcp_to_quic(
     let mut need_flush = false;
 
     loop {
-        let read_result = timeout(Duration::from_millis(FLUSH_TIMEOUT_MS), async {
-            tcp_reader.read(&mut buf).await
-        }).await;
+        let read_result =
+            timeout(Duration::from_millis(FLUSH_TIMEOUT_MS), async {
+                tcp_reader.read(&mut buf).await
+            })
+            .await;
 
         match read_result {
             Ok(Ok(n)) if n > 0 => {
