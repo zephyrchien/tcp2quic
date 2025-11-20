@@ -8,33 +8,26 @@ use quinn::{rustls, Endpoint, ServerConfig};
 use crate::common;
 use common::QuicStream;
 
-pub async fn run(
-    local: SocketAddr,
-    remote: SocketAddr,
-    hostname: String,
-) -> std::io::Result<()> {
-    let (certs, key) = common::generate_certificate(vec![hostname])?;
+pub async fn run(local: SocketAddr, remote: SocketAddr, hostname: String) {
+    let (certs, key) = common::generate_certificate(vec![hostname]).unwrap();
 
     let rustls_config = rustls::ServerConfig::builder()
         .with_no_client_auth()
         .with_single_cert(certs, key)
-        .map_err(common::to_invalid_input_error)?;
+        .unwrap();
 
     let mut server_config = ServerConfig::with_crypto(Arc::new(
         quinn::crypto::rustls::QuicServerConfig::try_from(rustls_config)
-            .map_err(std::io::Error::other)?,
+            .unwrap(),
     ));
 
     server_config.transport = Arc::new(common::transport_config());
 
-    let endpoint = Endpoint::server(server_config, local)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::AddrInUse, e))?;
+    let endpoint = Endpoint::server(server_config, local).unwrap();
 
     while let Some(incoming) = endpoint.accept().await {
         tokio::spawn(handle(incoming, remote));
     }
-
-    Ok(())
 }
 
 async fn handle(

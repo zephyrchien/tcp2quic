@@ -66,10 +66,6 @@ impl AsyncWrite for QuicStream {
     }
 }
 
-pub fn to_invalid_input_error<E: std::fmt::Display>(e: E) -> std::io::Error {
-    std::io::Error::new(std::io::ErrorKind::InvalidInput, e.to_string())
-}
-
 pub fn generate_certificate(
     san: Vec<String>,
 ) -> Result<(

@@ -68,12 +68,8 @@ mod verify {
     }
 }
 
-pub async fn run(
-    local: SocketAddr,
-    remote: SocketAddr,
-    sni: String,
-) -> std::io::Result<()> {
-    let lis = TcpListener::bind(&local).await?;
+pub async fn run(local: SocketAddr, remote: SocketAddr, sni: String) {
+    let lis = TcpListener::bind(&local).await.unwrap();
 
     let crypto = rustls::ClientConfig::builder()
         .dangerous()
@@ -81,25 +77,19 @@ pub async fn run(
         .with_no_client_auth();
 
     let mut quic_config = ClientConfig::new(Arc::new(
-        quinn::crypto::rustls::QuicClientConfig::try_from(crypto)
-            .map_err(Error::other)?,
+        quinn::crypto::rustls::QuicClientConfig::try_from(crypto).unwrap(),
     ));
 
     quic_config.transport_config(Arc::new(common::transport_config()));
 
     let local_bind = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
-    let mut ep = Endpoint::client(local_bind)?;
+    let mut ep = Endpoint::client(local_bind).unwrap();
     ep.set_default_client_config(quic_config);
 
     while let Ok((stream, _)) = lis.accept().await {
-        if let Err(e) = stream.set_nodelay(true) {
-            eprintln!("Failed to set TCP_NODELAY: {}", e);
-            continue;
-        }
+        let _ = stream.set_nodelay(true);
         tokio::spawn(handle(stream, ep.clone(), remote, sni.clone()));
     }
-
-    Ok(())
 }
 
 async fn handle(

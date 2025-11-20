@@ -63,11 +63,8 @@ impl Config {
 #[tokio::main]
 async fn main() {
     let c = Config::from_args();
-    if let Err(e) = match c.mode {
+    match c.mode {
         Mode::Client => client::run(c.local, c.remote, c.hostname).await,
         Mode::Server => server::run(c.local, c.remote, c.hostname).await,
-    } {
-        eprintln!("Error: {}", e);
-        exit(1);
     }
 }
