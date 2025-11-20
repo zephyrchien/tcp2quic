@@ -25,8 +25,7 @@ pub async fn run(
             .map_err(std::io::Error::other)?,
     ));
 
-    let transport_config = common::create_transport_config()?;
-    server_config.transport = Arc::new(transport_config);
+    server_config.transport = Arc::new(common::transport_config());
 
     let endpoint = Endpoint::server(server_config, local)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::AddrInUse, e))?;

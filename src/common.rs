@@ -90,23 +90,16 @@ pub fn generate_certificate(
     Ok((vec![cert_der], key_der))
 }
 
-pub fn create_transport_config() -> Result<quinn::TransportConfig> {
+pub fn transport_config() -> quinn::TransportConfig {
+    use quinn::VarInt;
     let mut transport = quinn::TransportConfig::default();
 
     transport.max_concurrent_bidi_streams(100u32.into());
     transport.max_concurrent_uni_streams(100u32.into());
-    transport.max_idle_timeout(Some(
-        std::time::Duration::from_millis(120000)
-            .try_into()
-            .map_err(to_invalid_input_error)?,
-    ));
+    transport.max_idle_timeout(Some(VarInt::from_u32(120_000).into()));
 
-    transport.stream_receive_window(
-        quinn::VarInt::from_u64(4 * 1024 * 1024).unwrap_or(quinn::VarInt::MAX),
-    );
-    transport.receive_window(
-        quinn::VarInt::from_u64(64 * 1024 * 1024).unwrap_or(quinn::VarInt::MAX),
-    );
+    transport.stream_receive_window(VarInt::from_u32(4 * 1024 * 1024));
+    transport.receive_window(VarInt::from_u32(64 * 1024 * 1024));
     transport.send_window(64 * 1024 * 1024);
 
     transport.initial_mtu(1350);
@@ -121,5 +114,5 @@ pub fn create_transport_config() -> Result<quinn::TransportConfig> {
     transport.datagram_receive_buffer_size(Some(64 * 1024));
     transport.datagram_send_buffer_size(64 * 1024);
 
-    Ok(transport)
+    transport
 }

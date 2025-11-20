@@ -85,8 +85,7 @@ pub async fn run(
             .map_err(Error::other)?,
     ));
 
-    let transport = common::create_transport_config()?;
-    quic_config.transport_config(Arc::new(transport));
+    quic_config.transport_config(Arc::new(common::transport_config()));
 
     let local_bind = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
     let mut ep = Endpoint::client(local_bind)?;
