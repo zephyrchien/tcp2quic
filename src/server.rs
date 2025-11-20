@@ -1,24 +1,24 @@
 use crate::common;
-use quinn::{Endpoint, ServerConfig};
+use quinn::{rustls, Endpoint, ServerConfig};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpStream;
 
-pub async fn run(local: SocketAddr, remote: SocketAddr, hostname: String) -> std::io::Result<()> {
+pub async fn run(
+    local: SocketAddr,
+    remote: SocketAddr,
+    hostname: String,
+) -> std::io::Result<()> {
     let (certs, key) = common::generate_certificate(vec![hostname])?;
 
-    let crypto_provider = Arc::new(rustls::crypto::aws_lc_rs::default_provider());
-
-    let rustls_config = rustls::ServerConfig::builder_with_provider(crypto_provider)
-        .with_safe_default_protocol_versions()
-        .map_err(common::to_invalid_input_error)?
+    let rustls_config = rustls::ServerConfig::builder()
         .with_no_client_auth()
         .with_single_cert(certs, key)
         .map_err(common::to_invalid_input_error)?;
 
     let mut server_config = ServerConfig::with_crypto(Arc::new(
         quinn::crypto::rustls::QuicServerConfig::try_from(rustls_config)
-            .map_err(std::io::Error::other)?
+            .map_err(std::io::Error::other)?,
     ));
 
     let transport_config = common::create_transport_config()?;
@@ -38,13 +38,15 @@ async fn handle(
     incoming: quinn::Incoming,
     remote: SocketAddr,
 ) -> std::io::Result<()> {
-    let connecting = incoming.accept()
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::ConnectionAborted, e))?;
+    let connecting = incoming.accept().map_err(|e| {
+        std::io::Error::new(std::io::ErrorKind::ConnectionAborted, e)
+    })?;
 
     let connection = match connecting.into_0rtt() {
         Ok((conn, _)) => conn,
-        Err(conn) => conn.await
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::ConnectionAborted, e))?,
+        Err(conn) => conn.await.map_err(|e| {
+            std::io::Error::new(std::io::ErrorKind::ConnectionAborted, e)
+        })?,
     };
 
     loop {

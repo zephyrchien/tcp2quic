@@ -2,6 +2,7 @@ use std::io::Result;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite, AsyncReadExt, AsyncWriteExt};
 use tokio::time::{timeout, Duration};
+use quinn::rustls;
 
 const BUFFER_SIZE: usize = 8 * 1024;
 const FLUSH_TIMEOUT_MS: u64 = 1;

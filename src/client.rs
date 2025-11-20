@@ -1,5 +1,5 @@
 use crate::common;
-use quinn::{ClientConfig, Endpoint};
+use quinn::{rustls, ClientConfig, Endpoint};
 use std::io::{Error, ErrorKind};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
@@ -22,7 +22,10 @@ impl quinn::rustls::client::danger::ServerCertVerifier for SkipVerify {
         _server_name: &quinn::rustls::pki_types::ServerName<'_>,
         _ocsp: &[u8],
         _now: quinn::rustls::pki_types::UnixTime,
-    ) -> std::result::Result<quinn::rustls::client::danger::ServerCertVerified, quinn::rustls::Error> {
+    ) -> std::result::Result<
+        quinn::rustls::client::danger::ServerCertVerified,
+        quinn::rustls::Error,
+    > {
         Ok(quinn::rustls::client::danger::ServerCertVerified::assertion())
     }
 
@@ -31,7 +34,10 @@ impl quinn::rustls::client::danger::ServerCertVerifier for SkipVerify {
         message: &[u8],
         cert: &quinn::rustls::pki_types::CertificateDer<'_>,
         dss: &quinn::rustls::DigitallySignedStruct,
-    ) -> std::result::Result<quinn::rustls::client::danger::HandshakeSignatureValid, quinn::rustls::Error> {
+    ) -> std::result::Result<
+        quinn::rustls::client::danger::HandshakeSignatureValid,
+        quinn::rustls::Error,
+    > {
         quinn::rustls::crypto::verify_tls12_signature(
             message,
             cert,
@@ -45,7 +51,10 @@ impl quinn::rustls::client::danger::ServerCertVerifier for SkipVerify {
         message: &[u8],
         cert: &quinn::rustls::pki_types::CertificateDer<'_>,
         dss: &quinn::rustls::DigitallySignedStruct,
-    ) -> std::result::Result<quinn::rustls::client::danger::HandshakeSignatureValid, quinn::rustls::Error> {
+    ) -> std::result::Result<
+        quinn::rustls::client::danger::HandshakeSignatureValid,
+        quinn::rustls::Error,
+    > {
         quinn::rustls::crypto::verify_tls13_signature(
             message,
             cert,
@@ -59,17 +68,20 @@ impl quinn::rustls::client::danger::ServerCertVerifier for SkipVerify {
     }
 }
 
-pub async fn run(local: SocketAddr, remote: SocketAddr, sni: String, insecure: bool) -> std::io::Result<()> {
+pub async fn run(
+    local: SocketAddr,
+    remote: SocketAddr,
+    sni: String,
+    insecure: bool,
+) -> std::io::Result<()> {
     let lis = TcpListener::bind(&local).await?;
 
-    let crypto_provider = Arc::new(rustls::crypto::aws_lc_rs::default_provider());
-
     let crypto = if insecure {
-        rustls::ClientConfig::builder_with_provider(crypto_provider.clone())
-            .with_safe_default_protocol_versions()
-            .map_err(common::to_invalid_input_error)?
+        rustls::ClientConfig::builder()
             .dangerous()
-            .with_custom_certificate_verifier(Arc::new(SkipVerify::new(crypto_provider)))
+            .with_custom_certificate_verifier(Arc::new(SkipVerify::new(
+                crypto_provider,
+            )))
             .with_no_client_auth()
     } else {
         let root_store = rustls::RootCertStore {
@@ -84,7 +96,7 @@ pub async fn run(local: SocketAddr, remote: SocketAddr, sni: String, insecure: b
 
     let mut quic_config = ClientConfig::new(Arc::new(
         quinn::crypto::rustls::QuicClientConfig::try_from(crypto)
-            .map_err(Error::other)?
+            .map_err(Error::other)?,
     ));
 
     let transport = common::create_transport_config()?;
