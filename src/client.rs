@@ -5,66 +5,62 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 
-#[derive(Debug)]
-struct SkipVerify(Arc<quinn::rustls::crypto::CryptoProvider>);
+mod verify {
+    use super::rustls;
+    use rustls::client::danger;
+    use rustls::pki_types;
 
-impl SkipVerify {
-    fn new(crypto_provider: Arc<rustls::crypto::CryptoProvider>) -> Self {
-        Self(crypto_provider)
-    }
-}
+    #[derive(Debug)]
+    pub struct SkipVerify;
 
-impl quinn::rustls::client::danger::ServerCertVerifier for SkipVerify {
-    fn verify_server_cert(
-        &self,
-        _end_entity: &quinn::rustls::pki_types::CertificateDer<'_>,
-        _intermediates: &[quinn::rustls::pki_types::CertificateDer<'_>],
-        _server_name: &quinn::rustls::pki_types::ServerName<'_>,
-        _ocsp: &[u8],
-        _now: quinn::rustls::pki_types::UnixTime,
-    ) -> std::result::Result<
-        quinn::rustls::client::danger::ServerCertVerified,
-        quinn::rustls::Error,
-    > {
-        Ok(quinn::rustls::client::danger::ServerCertVerified::assertion())
-    }
+    impl danger::ServerCertVerifier for SkipVerify {
+        fn verify_server_cert(
+            &self,
+            _: &pki_types::CertificateDer<'_>,
+            _: &[pki_types::CertificateDer<'_>],
+            _: &pki_types::ServerName<'_>,
+            _: &[u8],
+            _: pki_types::UnixTime,
+        ) -> Result<danger::ServerCertVerified, rustls::Error> {
+            Ok(danger::ServerCertVerified::assertion())
+        }
 
-    fn verify_tls12_signature(
-        &self,
-        message: &[u8],
-        cert: &quinn::rustls::pki_types::CertificateDer<'_>,
-        dss: &quinn::rustls::DigitallySignedStruct,
-    ) -> std::result::Result<
-        quinn::rustls::client::danger::HandshakeSignatureValid,
-        quinn::rustls::Error,
-    > {
-        quinn::rustls::crypto::verify_tls12_signature(
-            message,
-            cert,
-            dss,
-            &self.0.signature_verification_algorithms,
-        )
-    }
+        fn verify_tls12_signature(
+            &self,
+            _: &[u8],
+            _: &pki_types::CertificateDer<'_>,
+            _: &rustls::DigitallySignedStruct,
+        ) -> Result<danger::HandshakeSignatureValid, rustls::Error> {
+            Ok(danger::HandshakeSignatureValid::assertion())
+        }
 
-    fn verify_tls13_signature(
-        &self,
-        message: &[u8],
-        cert: &quinn::rustls::pki_types::CertificateDer<'_>,
-        dss: &quinn::rustls::DigitallySignedStruct,
-    ) -> std::result::Result<
-        quinn::rustls::client::danger::HandshakeSignatureValid,
-        quinn::rustls::Error,
-    > {
-        quinn::rustls::crypto::verify_tls13_signature(
-            message,
-            cert,
-            dss,
-            &self.0.signature_verification_algorithms,
-        )
-    }
+        fn verify_tls13_signature(
+            &self,
+            _: &[u8],
+            _: &pki_types::CertificateDer<'_>,
+            _: &rustls::DigitallySignedStruct,
+        ) -> Result<danger::HandshakeSignatureValid, rustls::Error> {
+            Ok(danger::HandshakeSignatureValid::assertion())
+        }
 
-    fn supported_verify_schemes(&self) -> Vec<quinn::rustls::SignatureScheme> {
-        self.0.signature_verification_algorithms.supported_schemes()
+        fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+            use rustls::SignatureScheme;
+            vec![
+                SignatureScheme::RSA_PKCS1_SHA1,
+                SignatureScheme::ECDSA_SHA1_Legacy,
+                SignatureScheme::RSA_PKCS1_SHA256,
+                SignatureScheme::ECDSA_NISTP256_SHA256,
+                SignatureScheme::RSA_PKCS1_SHA384,
+                SignatureScheme::ECDSA_NISTP384_SHA384,
+                SignatureScheme::RSA_PKCS1_SHA512,
+                SignatureScheme::ECDSA_NISTP521_SHA512,
+                SignatureScheme::RSA_PSS_SHA256,
+                SignatureScheme::RSA_PSS_SHA384,
+                SignatureScheme::RSA_PSS_SHA512,
+                SignatureScheme::ED25519,
+                SignatureScheme::ED448,
+            ]
+        }
     }
 }
 
@@ -79,9 +75,7 @@ pub async fn run(
     let crypto = if insecure {
         rustls::ClientConfig::builder()
             .dangerous()
-            .with_custom_certificate_verifier(Arc::new(SkipVerify::new(
-                crypto_provider,
-            )))
+            .with_custom_certificate_verifier(Arc::new(verify::SkipVerify {}))
             .with_no_client_auth()
     } else {
         let root_store = rustls::RootCertStore {
