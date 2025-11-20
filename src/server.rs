@@ -1,8 +1,12 @@
-use crate::common;
-use quinn::{rustls, Endpoint, ServerConfig};
 use std::net::SocketAddr;
 use std::sync::Arc;
+
 use tokio::net::TcpStream;
+
+use quinn::{rustls, Endpoint, ServerConfig};
+
+use crate::common;
+use common::QuicStream;
 
 pub async fn run(
     local: SocketAddr,
@@ -51,23 +55,17 @@ async fn handle(
 
     loop {
         match connection.accept_bi().await {
-            Ok((mut w_quic, mut r_quic)) => {
+            Ok((send, recv)) => {
+                let mut quic_stream = QuicStream::new(send, recv);
                 let mut tcp_stream = TcpStream::connect(&remote).await?;
                 tcp_stream.set_nodelay(true)?;
-                let (mut r_tcp, mut w_tcp) = tcp_stream.split();
-
-                tokio::select! {
-                    _ = common::copy_quic_to_tcp(&mut r_quic, &mut w_tcp) => {},
-                    _ = common::copy_tcp_to_quic(&mut r_tcp, &mut w_quic) => {},
-                };
+                let _ = tokio::io::copy_bidirectional(
+                    &mut quic_stream,
+                    &mut tcp_stream,
+                )
+                .await;
             }
-            Err(quinn::ConnectionError::ApplicationClosed { .. }) => {
-                break;
-            }
-            Err(quinn::ConnectionError::ConnectionClosed { .. }) => {
-                break;
-            }
-            Err(_) => {
+            _ => {
                 break;
             }
         }

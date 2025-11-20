@@ -1,11 +1,70 @@
-use quinn::rustls;
-use std::io::Result;
+use std::io::{Error, Result};
+use std::pin::Pin;
 use std::sync::Arc;
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use tokio::time::{timeout, Duration};
+use std::task::{Context, Poll};
 
-const BUFFER_SIZE: usize = 8 * 1024;
-const FLUSH_TIMEOUT_MS: u64 = 1;
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+
+use quinn::{rustls, RecvStream, SendStream};
+
+pub struct QuicStream {
+    send: SendStream,
+    recv: RecvStream,
+}
+
+impl QuicStream {
+    pub fn new(send: SendStream, recv: RecvStream) -> Self {
+        Self { send, recv }
+    }
+}
+
+impl From<(SendStream, RecvStream)> for QuicStream {
+    fn from(value: (SendStream, RecvStream)) -> Self {
+        Self::new(value.0, value.1)
+    }
+}
+
+impl AsyncRead for QuicStream {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<Result<()>> {
+        Pin::new(&mut self.recv)
+            .poll_read_buf(cx, buf)
+            .map_err(Error::other)
+    }
+}
+
+impl AsyncWrite for QuicStream {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<Result<usize>> {
+        Pin::new(&mut self.send)
+            .poll_write(cx, buf)
+            .map_err(Error::other)
+    }
+
+    fn poll_flush(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<()>> {
+        Pin::new(&mut self.send)
+            .poll_flush(cx)
+            .map_err(Error::other)
+    }
+
+    fn poll_shutdown(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<()>> {
+        Pin::new(&mut self.send)
+            .poll_shutdown(cx)
+            .map_err(Error::other)
+    }
+}
 
 pub fn to_invalid_input_error<E: std::fmt::Display>(e: E) -> std::io::Error {
     std::io::Error::new(std::io::ErrorKind::InvalidInput, e.to_string())
@@ -63,81 +122,4 @@ pub fn create_transport_config() -> Result<quinn::TransportConfig> {
     transport.datagram_send_buffer_size(64 * 1024);
 
     Ok(transport)
-}
-
-// Only flush when a read operation is blocked
-pub async fn copy_quic_to_tcp(
-    recv_stream: &mut quinn::RecvStream,
-    tcp_writer: &mut (impl AsyncWrite + Unpin),
-) -> Result<()> {
-    let mut buf = vec![0u8; BUFFER_SIZE];
-    let mut need_flush = false;
-
-    loop {
-        let read_result =
-            timeout(Duration::from_millis(FLUSH_TIMEOUT_MS), async {
-                recv_stream.read(&mut buf).await
-            })
-            .await;
-
-        match read_result {
-            Ok(Ok(Some(n))) if n > 0 => {
-                tcp_writer.write_all(&buf[..n]).await?;
-                need_flush = true;
-            }
-            Ok(Ok(_)) => break,
-            Ok(Err(e)) => return Err(std::io::Error::other(e)),
-            Err(_) => {
-                if need_flush {
-                    tcp_writer.flush().await?;
-                    need_flush = false;
-                }
-                continue;
-            }
-        }
-    }
-
-    if need_flush {
-        tcp_writer.flush().await?;
-    }
-    tcp_writer.shutdown().await?;
-    Ok(())
-}
-
-pub async fn copy_tcp_to_quic(
-    tcp_reader: &mut (impl AsyncRead + Unpin),
-    send_stream: &mut quinn::SendStream,
-) -> Result<()> {
-    let mut buf = vec![0u8; BUFFER_SIZE];
-    let mut need_flush = false;
-
-    loop {
-        let read_result =
-            timeout(Duration::from_millis(FLUSH_TIMEOUT_MS), async {
-                tcp_reader.read(&mut buf).await
-            })
-            .await;
-
-        match read_result {
-            Ok(Ok(n)) if n > 0 => {
-                send_stream.write_all(&buf[..n]).await?;
-                need_flush = true;
-            }
-            Ok(Ok(_)) => break,
-            Ok(Err(e)) => return Err(e),
-            Err(_) => {
-                if need_flush {
-                    send_stream.flush().await?;
-                    need_flush = false;
-                }
-                continue;
-            }
-        }
-    }
-
-    if need_flush {
-        send_stream.flush().await?;
-    }
-    send_stream.finish()?;
-    Ok(())
 }

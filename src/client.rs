@@ -1,9 +1,13 @@
-use crate::common;
-use quinn::{rustls, ClientConfig, Endpoint};
 use std::io::{Error, ErrorKind};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
+
 use tokio::net::{TcpListener, TcpStream};
+
+use quinn::{rustls, ClientConfig, Endpoint};
+
+use crate::common;
+use common::QuicStream;
 
 mod verify {
     use super::rustls;
@@ -116,12 +120,9 @@ async fn handle(
         Err(conn) => conn.await?,
     };
 
-    let (mut r_tcp, mut w_tcp) = tcp_stream.split();
-    let (mut w_quic, mut r_quic) = connection.open_bi().await?;
+    let mut quic_stream: QuicStream = connection.open_bi().await?.into();
 
-    tokio::select! {
-        _ = common::copy_tcp_to_quic(&mut r_tcp, &mut w_quic) => {},
-        _ = common::copy_quic_to_tcp(&mut r_quic, &mut w_tcp) => {},
-    };
-    Ok(())
+    tokio::io::copy_bidirectional(&mut tcp_stream, &mut quic_stream)
+        .await
+        .map(|_| ())
 }

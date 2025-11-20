@@ -6,10 +6,9 @@ use std::net::{SocketAddr, ToSocketAddrs};
 use std::process::exit;
 
 const USAGE: &str = concat!(
-    "usage: tcp2quic <mode> <local_addr> <remote_addr> <options>\n",
-    "\n",
-    "tcp2quic -c <local_addr> <remote_addr> <options>\n",
-    "tcp2quic -s <local_addr> <remote_addr> <options>"
+    "usage:\n",
+    "tcp2quic -c <tcp_addr> <quic_addr> <sni=localhost>\n",
+    "tcp2quic -s <quic_addr> <tcp_addr> <common_name=localhost>"
 );
 
 enum Mode {
