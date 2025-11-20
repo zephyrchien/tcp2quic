@@ -1,5 +1,5 @@
-use std::io::{Error, ErrorKind};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::io::Error;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 
 use tokio::net::{TcpListener, TcpStream};
@@ -69,8 +69,6 @@ mod verify {
 }
 
 pub async fn run(local: SocketAddr, remote: SocketAddr, sni: String) {
-    let lis = TcpListener::bind(&local).await.unwrap();
-
     let crypto = rustls::ClientConfig::builder()
         .dangerous()
         .with_custom_certificate_verifier(Arc::new(verify::SkipVerify {}))
@@ -82,10 +80,18 @@ pub async fn run(local: SocketAddr, remote: SocketAddr, sni: String) {
 
     quic_config.transport_config(Arc::new(common::transport_config()));
 
-    let local_bind = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
+    let local_bind = match remote {
+        SocketAddr::V4(..) => {
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0)
+        }
+        SocketAddr::V6(..) => {
+            SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0)
+        }
+    };
     let mut ep = Endpoint::client(local_bind).unwrap();
     ep.set_default_client_config(quic_config);
 
+    let lis = TcpListener::bind(&local).await.unwrap();
     while let Ok((stream, _)) = lis.accept().await {
         let _ = stream.set_nodelay(true);
         tokio::spawn(handle(stream, ep.clone(), remote, sni.clone()));
@@ -98,9 +104,7 @@ async fn handle(
     remote: SocketAddr,
     sni: String,
 ) -> std::io::Result<()> {
-    let connecting = ep
-        .connect(remote, &sni)
-        .map_err(|e| Error::new(ErrorKind::ConnectionAborted, e))?;
+    let connecting = ep.connect(remote, &sni).map_err(Error::other)?;
     let connection = match connecting.into_0rtt() {
         Ok((conn, zero)) => {
             zero.await;
