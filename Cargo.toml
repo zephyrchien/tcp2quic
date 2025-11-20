@@ -1,6 +1,6 @@
 [package]
 name = "tcp2quic"
-version = "0.2.2"
+version = "0.2.3"
 authors = ["zephyr <i@zephyr.moe>"]
 edition = "2021"
 
